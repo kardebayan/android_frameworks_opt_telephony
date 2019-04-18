@@ -78,6 +78,7 @@ java_library {
         "voip-common",
         "ims-common",
         "unsupportedappusage",
+        "vendor.mediatek.hardware.radio-V2.0-java",
     ],
     static_libs: [
         "android.hardware.radio.config-V1.0-java-shallow",
