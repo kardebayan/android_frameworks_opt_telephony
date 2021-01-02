@@ -276,6 +276,9 @@ public class RIL extends BaseCommands implements CommandsInterface {
     vendor.mediatek.hardware.radio.V2_0.IRadioResponse mMtkRadioResponse;
     vendor.mediatek.hardware.radio.V2_0.IRadioIndication mMtkRadioIndication;
     volatile vendor.mediatek.hardware.radio.V2_0.IRadio mMtkRadioProxy = null;
+    vendor.mediatek.hardware.radio.V3_0.IRadioResponse mMtkRadioResponse3;
+    vendor.mediatek.hardware.radio.V3_0.IRadioIndication mMtkRadioIndication3;
+    volatile vendor.mediatek.hardware.radio.V3_0.IRadio mMtkRadioProxy3 = null;
 
     // Thread-safe HashMap to map from RIL_REQUEST_XXX constant to HalVersion.
     // This is for Radio HAL Fallback Compatibility feature. When a RIL request
@@ -570,6 +573,23 @@ public class RIL extends BaseCommands implements CommandsInterface {
         }
 
         if (mRadioProxy != null) {
+            try {
+                mMtkRadioProxy3 =
+                    vendor.mediatek.hardware.radio.V3_0.IRadio.getService(
+                        HIDL_SERVICE_NAME[mPhoneId == null ? 0 : mPhoneId]);
+                if (mMtkRadioProxy3 != null) {
+                    if (mMtkRadioResponse3 == null && mMtkRadioIndication3 == null) {
+                        mMtkRadioResponse3 = new MtkRadioResponse3(this, mRadioResponse);
+                        mMtkRadioIndication3 = new MtkRadioIndication3(this, mRadioIndication);
+                    }
+                    mMtkRadioProxy3.setResponseFunctionsMtk(mMtkRadioResponse3, mMtkRadioIndication3);
+                }
+            } catch (RemoteException | RuntimeException e) {
+                riljLog("MTK RadioProxy V3_0 is not available");
+            }
+        }
+
+        if (mRadioProxy != null && mMtkRadioProxy3 == null) {
             try {
                 mMtkRadioProxy =
                     vendor.mediatek.hardware.radio.V2_0.IRadio.getService(
@@ -6984,16 +7004,20 @@ public class RIL extends BaseCommands implements CommandsInterface {
     void setCallIndication(int callId, int seqNo) {
         // Ensure that mMtkRadioProxy is updated.
         IRadio radioProxy = getRadioProxy(null);
-        if (mMtkRadioProxy != null) {
-            RILRequest rr = obtainRequest(-1, null, mRILDefaultWorkSource);
+        if (mMtkRadioProxy != null || mMtkRadioProxy3 != null) {
+            RILRequest rr = obtainRequest(2016 /* RIL_REQUEST_SET_CALL_INDICATION */, null, mRILDefaultWorkSource);
 
             if (RILJ_LOGD) {
                 riljLog(rr.serialString() + "> " + "setCallIndication");
             }
 
             try {
-                mMtkRadioProxy.setCallIndication(
-                    rr.mSerial, 0 /* 0: allowed, 1: disallowed */, callId, seqNo);
+                if (mMtkRadioProxy3 != null)
+                    mMtkRadioProxy3.setCallIndication(
+                        rr.mSerial, 0 /* 0: allowed, 1: disallowed */, callId, seqNo);
+                else
+                    mMtkRadioProxy.setCallIndication(
+                        rr.mSerial, 0 /* 0: allowed, 1: disallowed */, callId, seqNo);
             } catch (RemoteException | RuntimeException e) {
                 handleRadioProxyExceptionForRR(rr, "setCallIndication", e);
             }
